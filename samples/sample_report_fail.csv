@@ -1,0 +1,4 @@
+filePath,scanner,conclusion
+src/main.py,MIT,MIT
+src/vendor/network_module.py,AGPL-3.0-only,
+src/vendor/legacy_parser.c,GPL-3.0-only,

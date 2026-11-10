@@ -1,0 +1,33 @@
+[
+  {
+    "filePath": "src/main.py",
+    "findings": {
+      "scanner": [
+        "MIT"
+      ],
+      "conclusion": [
+        "MIT"
+      ]
+    }
+  },
+  {
+    "filePath": "src/helpers/utils.py",
+    "findings": {
+      "scanner": [
+        "Apache-2.0"
+      ],
+      "conclusion": null
+    }
+  },
+  {
+    "filePath": "src/helpers/formatter.py",
+    "findings": {
+      "scanner": [
+        "BSD-3-Clause"
+      ],
+      "conclusion": [
+        "BSD-3-Clause"
+      ]
+    }
+  }
+]

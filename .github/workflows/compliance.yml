@@ -1,0 +1,29 @@
+name: License Compliance Check
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  compliance-check:
+    name: Run FOSSology Compliance Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run Unit Tests
+        run: |
+          python3 -m unittest discover -s tests -v
+
+      - name: Validate Sample License Compliance Report
+        run: |
+          python3 compliance_checker.py --report samples/sample_report_pass.json --policy compliance_policy.json

@@ -1,0 +1,31 @@
+[
+  {
+    "filePath": "src/main.py",
+    "findings": {
+      "scanner": [
+        "MIT"
+      ],
+      "conclusion": [
+        "MIT"
+      ]
+    }
+  },
+  {
+    "filePath": "src/vendor/network_module.py",
+    "findings": {
+      "scanner": [
+        "AGPL-3.0-only"
+      ],
+      "conclusion": null
+    }
+  },
+  {
+    "filePath": "src/vendor/legacy_parser.c",
+    "findings": {
+      "scanner": [
+        "GPL-3.0-only"
+      ],
+      "conclusion": null
+    }
+  }
+]

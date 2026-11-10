@@ -1,0 +1,31 @@
+[
+  {
+    "filePath": "src/main.py",
+    "findings": {
+      "scanner": [
+        "MIT"
+      ],
+      "conclusion": [
+        "MIT"
+      ]
+    }
+  },
+  {
+    "filePath": "src/third_party/custom_codec.py",
+    "findings": {
+      "scanner": [
+        "Custom-Proprietary-v1"
+      ],
+      "conclusion": null
+    }
+  },
+  {
+    "filePath": "src/assets/data_loader.py",
+    "findings": {
+      "scanner": [
+        "No_license_found"
+      ],
+      "conclusion": null
+    }
+  }
+]
