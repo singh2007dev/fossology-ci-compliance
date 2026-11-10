@@ -184,6 +184,37 @@ BUILD STATUS: FAIL
 
 ---
 
+## 📊 CSV Report Usage
+
+In addition to JSON reports, the compliance checker supports tabular CSV scan reports (such as those generated from FOSSology UI exports or SPDX-aligned clearing spreadsheets).
+
+> [!NOTE]
+> CSV support uses recognized column headers to parse tabular scan data. CSV is **not** an official FOSSology REST API endpoint response format (which returns JSON via `/api/v1/uploads/{id}/licenses`), but is commonly exported from FOSSology web UI actions and SPDX export workflows.
+
+### Recognized Column Headers
+The CSV reader identifies columns case-insensitively:
+- **File path columns**: `filePath`, `FileName`, `file_path`
+- **Detected license columns**: `scanner`, `LicenseInfoInFile`, `license`, `licenses`
+- **Concluded license columns** *(optional)*: `conclusion`, `LicenseConcluded`, `concluded`
+
+Multiple licenses within a single cell may be separated by commas (`,`) or semicolons (`;`). Placeholder values such as `NONE` or `NOASSERTION` are recognized as missing license indicators (`No_license_found`).
+
+### Running with a CSV Report
+
+#### Passing Example:
+```bash
+python3 compliance_checker.py --report samples/sample_report_pass.csv
+```
+*(Evaluates compliant licenses and exits with code `0` / `PASS`)*
+
+#### Failing Example:
+```bash
+python3 compliance_checker.py --report samples/sample_report_fail.csv
+```
+*(Detects prohibited copyleft licenses and exits with code `1` / `FAIL`)*
+
+---
+
 ## 🧪 Running Unit Tests
 
 Run all unit tests using Python's built-in `unittest` runner:
