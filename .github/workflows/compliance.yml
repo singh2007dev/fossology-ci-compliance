@@ -10,6 +10,7 @@ jobs:
   compliance-check:
     name: Run FOSSology Compliance Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout Repository
@@ -24,6 +25,13 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -v
 
-      - name: Validate Sample License Compliance Report
+      - name: Create Source Archive
         run: |
-          python3 compliance_checker.py --report samples/sample_report_pass.json --policy compliance_policy.json
+          zip -r source_archive.zip . -x '*.git*' 'source_archive.zip'
+
+      - name: Run FOSSology CI Compliance Pipeline
+        env:
+          FOSSOLOGY_URL: ${{ secrets.FOSSOLOGY_URL }}
+          FOSSOLOGY_TOKEN: ${{ secrets.FOSSOLOGY_TOKEN }}
+        run: |
+          python3 run_ci_compliance.py --archive source_archive.zip --policy compliance_policy.json
