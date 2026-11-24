@@ -34,4 +34,4 @@ jobs:
           FOSSOLOGY_URL: ${{ secrets.FOSSOLOGY_URL }}
           FOSSOLOGY_TOKEN: ${{ secrets.FOSSOLOGY_TOKEN }}
         run: |
-          python3 run_ci_compliance.py --archive source_archive.zip --policy compliance_policy.json
+          python3 -u run_ci_compliance.py --archive source_archive.zip --policy compliance_policy.json

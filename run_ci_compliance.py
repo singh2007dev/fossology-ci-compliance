@@ -8,6 +8,7 @@ import argparse
 import os
 import sys
 import time
+import json
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from compliance_checker import (
@@ -83,6 +84,8 @@ def poll_jobs(
             )
 
         job_info = client.get_job_status(upload_id=upload_id)
+        print("DEBUG job_info type:", type(job_info).__name__)
+        print("DEBUG job_info:", json.dumps(job_info, indent=2)[:3000])
 
         # Normalize job_info to a list
         if isinstance(job_info, list):
