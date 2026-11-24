@@ -211,7 +211,7 @@ def run_pipeline(
             client=client,
             upload_id=upload_id,
             stage_name="initial upload-processing",
-            required_job_names=("ununpack", "adj2nest"),
+            # required_job_names=("ununpack", "adj2nest"),
             poll_interval=poll_interval,
             timeout=timeout,
             sleep_fn=sleep_fn,
