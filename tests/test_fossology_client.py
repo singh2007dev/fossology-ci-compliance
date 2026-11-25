@@ -8,6 +8,7 @@ import os
 import tempfile
 import unittest
 import urllib.error
+from urllib.parse import parse_qs, urlsplit
 from unittest.mock import MagicMock, patch
 
 from fossology_client import (
@@ -509,8 +510,9 @@ class TestFossologyClient(unittest.TestCase):
         req = call_args[0][0]
         self.assertEqual(
             req.get_full_url(),
-            "http://fossology.example.com/repo/api/v1/uploads/42/licenses",
+            "http://fossology.example.com/repo/api/v1/uploads/42/licenses?agent=nomos%2Cmonk",
         )
+        self.assertEqual(parse_qs(urlsplit(req.get_full_url()).query), {"agent": ["nomos,monk"]})
         self.assertEqual(req.get_method(), "GET")
         self.assertEqual(req.headers["Authorization"], "Bearer secret_bearer_token_12345")
         self.assertEqual(req.headers["Accept"], "application/json")
@@ -528,6 +530,40 @@ class TestFossologyClient(unittest.TestCase):
         findings = client.get_license_findings(upload_id=42)
 
         self.assertEqual(findings[0]["filePath"], "lib.c")
+
+    @patch("urllib.request.urlopen")
+    def test_get_license_findings_empty_response(self, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.read.return_value = b"[]"
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        findings = get_license_findings(
+            upload_id=42,
+            server_url=self.test_url,
+            token=self.test_token,
+        )
+
+        self.assertEqual(findings, [])
+
+    @patch("urllib.request.urlopen")
+    def test_get_license_findings_http_error(self, mock_urlopen):
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            url="http://fossology.example.com/repo/api/v1/uploads/42/licenses",
+            code=400,
+            msg="Bad Request",
+            hdrs={},
+            fp=io.BytesIO(b'{"message": "agent parameter missing from query."}'),
+        )
+
+        with self.assertRaises(FossologyHttpError) as ctx:
+            get_license_findings(
+                upload_id=42,
+                server_url=self.test_url,
+                token=self.test_token,
+            )
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("agent parameter missing", str(ctx.exception))
 
     @patch("urllib.request.urlopen")
     def test_get_license_findings_auth_failure(self, mock_urlopen):

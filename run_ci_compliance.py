@@ -8,7 +8,6 @@ import argparse
 import os
 import sys
 import time
-import json
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from compliance_checker import (
@@ -93,9 +92,6 @@ def poll_jobs(
             job_info = client.get_job_status(upload_id=upload_id)
         else:
             raise ValueError("Either upload_id or job_id must be provided to poll_jobs.")
-
-        print("DEBUG job_info type:", type(job_info).__name__)
-        print("DEBUG job_info:", json.dumps(job_info, indent=2)[:3000])
 
         # Normalize job_info to a list
         if isinstance(job_info, list):
@@ -304,7 +300,12 @@ def run_pipeline(
         findings = client.get_license_findings(upload_id=upload_id)
 
         summary = process_report(findings, policy)
-        print_summary(summary)
+        print_summary(
+            summary,
+            upload_id=upload_id,
+            archive_name=os.path.basename(archive_path),
+            scan_status="COMPLETED",
+        )
 
         return 0 if summary["status"] == "PASS" else 1
 

@@ -6,13 +6,13 @@ CI pipeline integration for automated open-source license compliance using FOSSo
 
 This project automates software license compliance checks by connecting FOSSology with a Python-based compliance checker and GitHub Actions.
 
-The pipeline is designed to:
+The pipeline runs these stages:
 
 1. Upload a source-code archive to a FOSSology server.
-2. Schedule license analysis using FOSSology scanner agents.
-3. Retrieve license findings from FOSSology.
-4. Evaluate detected licenses against a configurable compliance policy.
-5. Generate a compliance summary and return an appropriate CI exit code.
+2. Wait for the upload's `ununpack` and `adj2nest` jobs to complete.
+3. Schedule the Nomos and Monk license scanners and wait for the scheduled scan job.
+4. Retrieve license findings using `GET /uploads/{id}/licenses?agent=nomos,monk`.
+5. Evaluate detected licenses against a configurable compliance policy and print a summary.
 
 The project also supports offline evaluation of existing FOSSology JSON and CSV reports.
 
@@ -24,6 +24,7 @@ The project also supports offline evaluation of existing FOSSology JSON and CSV 
 - Human conclusion precedence over automated scanner findings.
 - Detection of prohibited, unapproved, and missing licenses.
 - PASS/FAIL build status through exit codes.
+- A pipeline summary with upload ID, archive name, scan status, findings, and detected allowed/disallowed licenses.
 - GitHub Actions integration.
 - Unit tests using Python's built-in `unittest` framework.
 
@@ -157,6 +158,8 @@ export FOSSOLOGY_URL="https://your-fossology-server/repo"
 export FOSSOLOGY_TOKEN="your-api-token"
 ```
 
+`FOSSOLOGY_SERVER_URL` is also accepted as an alternate name for the server URL. The findings request supplies the required `agent` query parameter with `nomos,monk`, matching the scanners scheduled by this pipeline.
+
 Never commit API tokens or other credentials to the repository.
 
 ## GitHub Actions Integration
@@ -178,13 +181,13 @@ The workflow runs on pushes and pull requests targeting the `main` branch.
 
 ## Running Unit Tests
 
-Run the complete test suite:
+Run the complete test suite (all FOSSology API calls are mocked):
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m pytest -q
 ```
 
-The project currently has 74 unit tests covering:
+The tests cover:
 
 - JSON and CSV report parsing.
 - License extraction and policy evaluation.
@@ -192,26 +195,14 @@ The project currently has 74 unit tests covering:
 - Upload and job scheduling behavior.
 - CI orchestration and error handling.
 
-API-related tests use mocks; they do not represent 74 live server tests.
+API-related tests use mocks and do not upload archives or start scans.
 
 ## Current Implementation Status
 
-The following functionality has been verified:
-
-- Offline compliance checking.
-- Unit tests passing.
-- Archive upload to the hosted FOSSology server.
-- Manual Nomos scan execution.
-- Retrieval and display of license findings.
-
-**Known limitation:** The automated API scheduling request from GitHub Actions currently returns HTTP 404, reporting that the upload is not associated with the specified folder or that the account lacks write permission. Manual Nomos scheduling through the FOSSology web interface has succeeded.
-
-Therefore, the complete automated end-to-end GitHub Actions scan is not yet verified.
+The project includes mocked tests for upload, job polling, findings retrieval, compliance evaluation, and failure handling. These tests verify the request format, including the required findings `agent` parameter. They do not verify connectivity, permissions, or scan execution on a live FOSSology server. A live GitHub Actions run is required to verify those server-specific settings.
 
 ## Future Improvements
 
-- Resolve automated API job scheduling and permission handling.
-- Verify complete automated scanning through GitHub Actions.
 - Improve compliance reporting and error diagnostics.
 - Add further integration tests against a controlled FOSSology instance.
 

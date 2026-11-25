@@ -11,6 +11,7 @@ import socket
 import urllib.error
 import urllib.request
 import uuid
+from urllib.parse import urlencode
 from typing import Any, Dict, Optional, Tuple, Union
 
 
@@ -394,21 +395,24 @@ def get_license_findings(
     server_url: Optional[str] = None,
     token: Optional[str] = None,
     timeout: int = 60,
+    agent: str = "nomos,monk",
 ) -> Any:
     """
-    Retrieve license scan findings for an upload via GET /repo/api/v1/uploads/{upload_id}/licenses.
+    Retrieve license scan findings via GET /repo/api/v1/uploads/{upload_id}/licenses?agent=...
 
     Args:
         upload_id: Target upload ID.
         server_url: Optional server URL (defaults to FOSSOLOGY_URL env var).
         token: Optional Bearer token (defaults to FOSSOLOGY_TOKEN env var).
         timeout: Request timeout in seconds (default: 60).
+        agent: Comma-separated license agent names to retrieve (default: 'nomos,monk').
 
     Returns:
         Parsed JSON license findings list.
     """
     base_url, auth_token = get_fossology_config(server_url=server_url, token=token)
-    endpoint = build_api_url(base_url, f"uploads/{upload_id}/licenses")
+    query = urlencode({"agent": agent})
+    endpoint = build_api_url(base_url, f"uploads/{upload_id}/licenses?{query}")
 
     headers = {
         "Authorization": f"Bearer {auth_token}",
@@ -502,13 +506,15 @@ class FossologyClient:
         self,
         upload_id: Union[int, str],
         timeout: Optional[int] = None,
+        agent: str = "nomos,monk",
     ) -> Any:
         """
-        Retrieve license scan findings for an upload via GET /repo/api/v1/uploads/{upload_id}/licenses.
+        Retrieve license scan findings for an upload via GET /repo/api/v1/uploads/{upload_id}/licenses?agent=...
         """
         return get_license_findings(
             upload_id=upload_id,
             server_url=self.server_url,
             token=self.token,
             timeout=timeout or self.timeout,
+            agent=agent,
         )

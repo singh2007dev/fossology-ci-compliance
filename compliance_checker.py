@@ -9,7 +9,7 @@ import csv
 import json
 import os
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 # Default compliance policy
@@ -321,6 +321,23 @@ def process_report(report_data: Any, policy: Dict[str, Any]) -> Dict[str, Any]:
     """
     file_items = parse_fossology_report(report_data)
 
+    if not file_items:
+        return {
+            "status": "FAIL",
+            "total_files": 0,
+            "all_licenses": [],
+            "allowed_licenses": [],
+            "disallowed_licenses": [],
+            "passed_files": [],
+            "denied_files": [],
+            "review_files": [{
+                "filePath": "Unknown File",
+                "status": "NEEDS_REVIEW",
+                "licenses": ["No_findings_returned"],
+                "reason": "FOSSology returned no license findings to evaluate",
+            }],
+        }
+
     passed_files = []
     denied_files = []
     review_files = []
@@ -328,7 +345,7 @@ def process_report(report_data: Any, policy: Dict[str, Any]) -> Dict[str, Any]:
 
     for item in file_items:
         if not isinstance(item, dict):
-            continue
+            raise ValueError("Invalid report format: each finding must be a JSON object.")
 
         file_path, licenses = extract_file_licenses(item)
         for lic in licenses:
@@ -348,31 +365,50 @@ def process_report(report_data: Any, policy: Dict[str, Any]) -> Dict[str, Any]:
     # PASS only if there are zero denied and zero review-required files
     has_issues = len(denied_files) > 0 or len(review_files) > 0
     overall_status = "FAIL" if has_issues else "PASS"
+    allowed_licenses = set(policy.get("allowed_licenses", []))
+    detected_licenses = set(all_detected_licenses)
 
     return {
         "status": overall_status,
         "total_files": len(file_items),
         "all_licenses": sorted(list(all_detected_licenses)),
+        "allowed_licenses": sorted(detected_licenses & allowed_licenses),
+        "disallowed_licenses": sorted(detected_licenses - allowed_licenses),
         "passed_files": passed_files,
         "denied_files": denied_files,
         "review_files": review_files,
     }
 
 
-def print_summary(summary: Dict[str, Any]) -> None:
+def print_summary(
+    summary: Dict[str, Any],
+    upload_id: Optional[Union[int, str]] = None,
+    archive_name: Optional[str] = None,
+    scan_status: Optional[str] = None,
+) -> None:
     """
     Print an easy-to-read compliance report to standard output.
     """
     print("=" * 60)
     print("       FOSSology CI License Compliance Summary")
     print("=" * 60)
-    print(f"Total Files Scanned : {summary['total_files']}")
+    if upload_id is not None:
+        print(f"Upload ID           : {upload_id}")
+    if archive_name:
+        print(f"Archive             : {archive_name}")
+    if scan_status:
+        print(f"Scan Status         : {scan_status}")
+    print(f"Total Findings      : {summary['total_files']}")
     print(f"Passed Files        : {len(summary['passed_files'])}")
     print(f"Denied Files        : {len(summary['denied_files'])}")
     print(f"Review Required     : {len(summary['review_files'])}")
 
     detected = ", ".join(summary["all_licenses"]) if summary["all_licenses"] else "None"
     print(f"Detected Licenses   : {detected}")
+    allowed = ", ".join(summary.get("allowed_licenses", [])) or "None"
+    disallowed = ", ".join(summary.get("disallowed_licenses", [])) or "None"
+    print(f"Allowed Licenses    : {allowed}")
+    print(f"Disallowed Licenses : {disallowed}")
     print("-" * 60)
 
     if summary["denied_files"]:

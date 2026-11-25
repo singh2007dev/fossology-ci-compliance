@@ -645,7 +645,9 @@ class TestRunCICompliance(unittest.TestCase):
             return res
 
         mock_instance.get_job_status.side_effect = mock_get_job_status
-        mock_instance.get_license_findings.return_value = []
+        mock_instance.get_license_findings.return_value = [
+            {"filePath": "src/main.py", "findings": {"scanner": ["MIT"], "conclusion": None}},
+        ]
 
         code = run_pipeline(
             archive_path=self.archive_path,
@@ -757,7 +759,9 @@ class TestRunCICompliance(unittest.TestCase):
             return res
 
         mock_instance.get_job_status.side_effect = mock_get_job_status
-        mock_instance.get_license_findings.return_value = []
+        mock_instance.get_license_findings.return_value = [
+            {"filePath": "src/main.py", "findings": {"scanner": ["MIT"], "conclusion": None}},
+        ]
 
         code = run_pipeline(
             archive_path=self.archive_path,
@@ -829,6 +833,56 @@ class TestRunCICompliance(unittest.TestCase):
 
         # Prohibited license must exit with code 1
         self.assertEqual(code, 1)
+
+    @patch("run_ci_compliance.FossologyClient")
+    def test_run_pipeline_empty_findings_fails_compliance(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.upload_archive.return_value = 101
+        mock_instance.schedule_scan.return_value = 202
+        mock_instance.get_job_status.side_effect = [
+            [
+                {"name": "ununpack", "status": "COMPLETED"},
+                {"name": "adj2nest", "status": "COMPLETED"},
+            ],
+            [{"id": 202, "status": "COMPLETED"}],
+        ]
+        mock_instance.get_license_findings.return_value = []
+
+        code = run_pipeline(
+            archive_path=self.archive_path,
+            server_url=self.server_url,
+            token=self.token,
+            poll_interval=1,
+            timeout=10,
+            sleep_fn=lambda seconds: None,
+        )
+
+        self.assertEqual(code, 1)
+
+    @patch("run_ci_compliance.FossologyClient")
+    def test_run_pipeline_findings_api_error_returns_error_exit_code(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.upload_archive.return_value = 101
+        mock_instance.schedule_scan.return_value = 202
+        mock_instance.get_job_status.side_effect = [
+            [
+                {"name": "ununpack", "status": "COMPLETED"},
+                {"name": "adj2nest", "status": "COMPLETED"},
+            ],
+            [{"id": 202, "status": "COMPLETED"}],
+        ]
+        mock_instance.get_license_findings.side_effect = FossologyHttpError(400, "invalid findings request")
+
+        code = run_pipeline(
+            archive_path=self.archive_path,
+            server_url=self.server_url,
+            token=self.token,
+            poll_interval=1,
+            timeout=10,
+            sleep_fn=lambda seconds: None,
+        )
+
+        self.assertEqual(code, 2)
 
     def test_run_pipeline_archive_not_found(self):
         code = run_pipeline(

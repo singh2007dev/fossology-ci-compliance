@@ -191,6 +191,19 @@ class TestComplianceChecker(unittest.TestCase):
         self.assertEqual(len(summary["passed_files"]), 2)
         self.assertEqual(len(summary["denied_files"]), 0)
         self.assertEqual(len(summary["review_files"]), 0)
+        self.assertEqual(summary["allowed_licenses"], ["Apache-2.0", "MIT"])
+        self.assertEqual(summary["disallowed_licenses"], [])
+
+    def test_process_empty_report_fails_for_review(self):
+        summary = process_report([], self.policy)
+
+        self.assertEqual(summary["status"], "FAIL")
+        self.assertEqual(summary["total_files"], 0)
+        self.assertIn("no license findings", summary["review_files"][0]["reason"].lower())
+
+    def test_process_report_rejects_non_object_finding(self):
+        with self.assertRaisesRegex(ValueError, "each finding must be a JSON object"):
+            process_report(["unexpected"], self.policy)
 
     def test_process_report_fail_on_denied(self):
         report = [
