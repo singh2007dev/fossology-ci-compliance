@@ -26,8 +26,7 @@ jobs:
           python3 -m unittest discover -s tests -v
 
       - name: Create Source Archive
-        run: |
-          zip -r source_archive.zip . -x '*.git*' 'source_archive.zip'
+        run: python3 create_source_archive.py --output source_archive.zip
 
       - name: Run FOSSology CI Compliance Pipeline
         env:

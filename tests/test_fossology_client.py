@@ -510,9 +510,12 @@ class TestFossologyClient(unittest.TestCase):
         req = call_args[0][0]
         self.assertEqual(
             req.get_full_url(),
-            "http://fossology.example.com/repo/api/v1/uploads/42/licenses?agent=nomos%2Cmonk",
+            "http://fossology.example.com/repo/api/v1/uploads/42/licenses?agent=nomos%2Cmonk&containers=false",
         )
-        self.assertEqual(parse_qs(urlsplit(req.get_full_url()).query), {"agent": ["nomos,monk"]})
+        self.assertEqual(
+            parse_qs(urlsplit(req.get_full_url()).query),
+            {"agent": ["nomos,monk"], "containers": ["false"]},
+        )
         self.assertEqual(req.get_method(), "GET")
         self.assertEqual(req.headers["Authorization"], "Bearer secret_bearer_token_12345")
         self.assertEqual(req.headers["Accept"], "application/json")

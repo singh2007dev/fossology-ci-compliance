@@ -396,6 +396,7 @@ def get_license_findings(
     token: Optional[str] = None,
     timeout: int = 60,
     agent: str = "nomos,monk",
+    containers: bool = False,
 ) -> Any:
     """
     Retrieve license scan findings via GET /repo/api/v1/uploads/{upload_id}/licenses?agent=...
@@ -406,12 +407,13 @@ def get_license_findings(
         token: Optional Bearer token (defaults to FOSSOLOGY_TOKEN env var).
         timeout: Request timeout in seconds (default: 60).
         agent: Comma-separated license agent names to retrieve (default: 'nomos,monk').
+        containers: Whether to include archive/container entries (default: False).
 
     Returns:
         Parsed JSON license findings list.
     """
     base_url, auth_token = get_fossology_config(server_url=server_url, token=token)
-    query = urlencode({"agent": agent})
+    query = urlencode({"agent": agent, "containers": str(containers).lower()})
     endpoint = build_api_url(base_url, f"uploads/{upload_id}/licenses?{query}")
 
     headers = {
@@ -507,6 +509,7 @@ class FossologyClient:
         upload_id: Union[int, str],
         timeout: Optional[int] = None,
         agent: str = "nomos,monk",
+        containers: bool = False,
     ) -> Any:
         """
         Retrieve license scan findings for an upload via GET /repo/api/v1/uploads/{upload_id}/licenses?agent=...
@@ -517,4 +520,5 @@ class FossologyClient:
             token=self.token,
             timeout=timeout or self.timeout,
             agent=agent,
+            containers=containers,
         )

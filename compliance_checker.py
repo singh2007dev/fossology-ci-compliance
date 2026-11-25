@@ -12,29 +12,7 @@ import sys
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 
-# Default compliance policy
-# Permissive licenses are allowed; restrictive copyleft licenses are denied by default.
-DEFAULT_POLICY = {
-    "allowed_licenses": [
-        "MIT",
-        "Apache-2.0",
-        "BSD-2-Clause",
-        "BSD-3-Clause",
-        "ISC",
-        "Unlicense",
-        "CC0-1.0",
-    ],
-    "denied_licenses": [
-        "AGPL-3.0-only",
-        "AGPL-3.0-or-later",
-        "GPL-2.0-only",
-        "GPL-2.0-or-later",
-        "GPL-3.0-only",
-        "GPL-3.0-or-later",
-        "SSPL-1.0",
-    ],
-    "allow_unlicensed": False,
-}
+DEFAULT_POLICY_PATH = os.path.join(os.path.dirname(__file__), "compliance_policy.json")
 
 
 def load_json_file(file_path: str) -> Any:
@@ -53,6 +31,11 @@ def load_json_file(file_path: str) -> Any:
             return json.load(f)
     except json.JSONDecodeError as err:
         raise ValueError(f"Invalid JSON format in {file_path}: {err}") from err
+
+
+# Keep the policy in its dedicated configuration file instead of duplicating
+# its license identifiers in scanner-targeted Python source.
+DEFAULT_POLICY = load_json_file(DEFAULT_POLICY_PATH)
 
 
 def _split_license_string(cell: Optional[str]) -> List[str]:
@@ -181,7 +164,7 @@ def load_policy(policy_path: Optional[str] = None) -> Dict[str, Any]:
     Load compliance policy from a JSON file, or return DEFAULT_POLICY if None.
     """
     if not policy_path:
-        return DEFAULT_POLICY.copy()
+        policy_path = DEFAULT_POLICY_PATH
 
     loaded = load_json_file(policy_path)
     if not isinstance(loaded, dict):

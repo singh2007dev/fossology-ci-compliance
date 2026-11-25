@@ -44,8 +44,10 @@ fossology-ci-compliance/
 ├── tests/
 │   ├── test_compliance_checker.py
 │   ├── test_fossology_client.py
-│   └── test_run_ci_compliance.py
+│   ├── test_run_ci_compliance.py
+│   └── test_source_archive.py
 ├── compliance_checker.py
+├── create_source_archive.py
 ├── compliance_policy.json
 ├── fossology_client.py
 ├── run_ci_compliance.py
@@ -170,6 +172,8 @@ The workflow is configured in:
 
 It runs unit tests, creates a source archive, and invokes the FOSSology compliance pipeline.
 
+The archive builder includes only the runtime Python modules. Test fixtures, reports, documentation, policy configuration, bytecode caches, and the archive itself are not scan inputs. The test suite still runs before archive creation. FOSSology findings retrieval excludes archive/container entries while scanning the files inside the archive.
+
 Configure these GitHub repository secrets:
 
 | Secret | Description |
@@ -208,4 +212,4 @@ The project includes mocked tests for upload, job polling, findings retrieval, c
 
 ## License
 
-See the repository's license file for usage and distribution terms.
+This repository does not currently contain a `LICENSE` file or declare a project license. No license has been inferred for these files.
