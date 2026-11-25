@@ -194,6 +194,45 @@ class TestComplianceChecker(unittest.TestCase):
         self.assertEqual(summary["allowed_licenses"], ["Apache-2.0", "MIT"])
         self.assertEqual(summary["disallowed_licenses"], [])
 
+    def test_process_report_excludes_only_exact_archive_container(self):
+        report = [
+            {"filePath": "source_archive.zip", "findings": {"scanner": [], "conclusion": None}},
+            {
+                "filePath": "source_archive.zip/run_ci_compliance.py",
+                "findings": {"scanner": ["GPL-3.0-only"], "conclusion": None},
+            },
+            {
+                "filePath": "source_archive.zip/compliance_checker.py",
+                "findings": {"scanner": [], "conclusion": None},
+            },
+        ]
+
+        summary = process_report(report, self.policy, archive_name="source_archive.zip")
+
+        self.assertEqual(summary["total_files"], 2)
+        self.assertEqual(summary["status"], "FAIL")
+        self.assertEqual(len(summary["denied_files"]), 1)
+        self.assertEqual(
+            summary["denied_files"][0]["filePath"],
+            "source_archive.zip/run_ci_compliance.py",
+        )
+        self.assertEqual(len(summary["review_files"]), 1)
+        self.assertEqual(
+            summary["review_files"][0]["filePath"],
+            "source_archive.zip/compliance_checker.py",
+        )
+
+    def test_process_report_keeps_unapproved_json_in_review(self):
+        report = [
+            {"filePath": "source_archive.zip/fossology_client.py", "findings": {"scanner": ["JSON"]}}
+        ]
+
+        summary = process_report(report, self.policy, archive_name="source_archive.zip")
+
+        self.assertEqual(summary["status"], "FAIL")
+        self.assertEqual(summary["review_files"][0]["licenses"], ["JSON"])
+        self.assertEqual(summary["denied_files"], [])
+
     def test_process_empty_report_fails_for_review(self):
         summary = process_report([], self.policy)
 

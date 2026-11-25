@@ -312,7 +312,11 @@ def run_pipeline(
         print(f"[5/5] Retrieving license findings and evaluating compliance...")
         findings = client.get_license_findings(upload_id=upload_id)
 
-        summary = process_report(findings, policy)
+        summary = process_report(
+            findings,
+            policy,
+            archive_name=os.path.basename(archive_path),
+        )
         print_summary(
             summary,
             upload_id=upload_id,

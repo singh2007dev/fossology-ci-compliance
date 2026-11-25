@@ -298,11 +298,25 @@ def parse_fossology_report(raw_data: Any) -> List[Dict[str, Any]]:
     )
 
 
-def process_report(report_data: Any, policy: Dict[str, Any]) -> Dict[str, Any]:
+def process_report(
+    report_data: Any,
+    policy: Dict[str, Any],
+    archive_name: Optional[str] = None,
+) -> Dict[str, Any]:
     """
-    Process all entries in a FOSSology report and produce a compliance summary.
+    Process file entries in a FOSSology report and produce a compliance summary.
+
+    When archive_name is provided, exclude only the exact upload-root entry for
+    that archive. FOSSology may return that container even with containers=false;
+    entries below the archive path remain subject to normal policy evaluation.
     """
     file_items = parse_fossology_report(report_data)
+    if archive_name:
+        file_items = [
+            item
+            for item in file_items
+            if not (isinstance(item, dict) and item.get("filePath") == archive_name)
+        ]
 
     if not file_items:
         return {

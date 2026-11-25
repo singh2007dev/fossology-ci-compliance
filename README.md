@@ -172,7 +172,7 @@ The workflow is configured in:
 
 It runs unit tests, creates a source archive, and invokes the FOSSology compliance pipeline.
 
-The archive builder includes only the runtime Python modules. Test fixtures, reports, documentation, policy configuration, bytecode caches, and the archive itself are not scan inputs. The test suite still runs before archive creation. FOSSology findings retrieval excludes archive/container entries while scanning the files inside the archive.
+The archive builder includes only the runtime Python modules. Test fixtures, reports, documentation, policy configuration, bytecode caches, and the archive itself are not scan inputs. The test suite still runs before archive creation. Findings retrieval requests `containers=false`; if FOSSology still returns the exact upload-root archive entry, the compliance checker excludes only that root entry. Findings for files inside the archive continue through normal policy evaluation.
 
 Configure these GitHub repository secrets:
 
