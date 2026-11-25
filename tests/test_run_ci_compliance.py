@@ -7,6 +7,7 @@ import io
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import MagicMock, call, patch
 
 from fossology_client import (
@@ -1006,6 +1007,44 @@ class TestRunCICompliance(unittest.TestCase):
         self.assertEqual([job["status"] for job in jobs], ["Completed", "Completed"])
         self.assertEqual(mock_client.get_job_status.call_count, 3)
         self.assertEqual(sleep_calls, [2, 2])
+
+    def test_poll_jobs_history_uses_queue_flags_when_status_is_missing(self):
+        """A started queue item and a null status remain pending until both finish."""
+        mock_client = MagicMock()
+        mock_client.get_job_status.side_effect = [
+            [{"jobId": 13, "jobName": "source_archive.zip", "uploadId": 6, "jobQueue": [
+                {"jobQueueId": 19, "jobQueueType": "ununpack", "status": "Started",
+                 "isInProgress": True, "isReady": False},
+                {"jobQueueId": 20, "jobQueueType": "adj2nest", "status": None,
+                 "isInProgress": True, "isReady": False},
+            ]}],
+            [{"jobId": 13, "jobName": "source_archive.zip", "uploadId": 6, "jobQueue": [
+                {"jobQueueId": 19, "jobQueueType": "ununpack", "status": "Completed",
+                 "isInProgress": False, "isReady": False},
+                {"jobQueueId": 20, "jobQueueType": "adj2nest", "status": "Completed",
+                 "isInProgress": False, "isReady": False},
+            ]}],
+        ]
+
+        sleep_calls = []
+        output = io.StringIO()
+        with redirect_stdout(output):
+            jobs = poll_jobs(
+                client=mock_client,
+                upload_id=6,
+                stage_name="initial upload-processing",
+                required_job_names=("ununpack", "adj2nest"),
+                poll_interval=2,
+                timeout=10,
+                sleep_fn=lambda seconds: sleep_calls.append(seconds),
+            )
+
+        self.assertEqual([job["status"] for job in jobs], ["Completed", "Completed"])
+        self.assertEqual(mock_client.get_job_status.call_count, 2)
+        self.assertEqual(sleep_calls, [2])
+        self.assertIn("STARTED: 1", output.getvalue())
+        self.assertIn("PROCESSING: 1", output.getvalue())
+        self.assertNotIn("UNKNOWN: 1", output.getvalue())
 
     def test_poll_jobs_history_fails_when_an_agent_fails(self):
         mock_client = MagicMock()

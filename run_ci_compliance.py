@@ -35,6 +35,18 @@ def _normalize_status(raw_status: Any) -> str:
     return str(raw_status).strip().upper()
 
 
+def _job_status(job: Dict[str, Any]) -> str:
+    """Use FOSSology's queue flags when its human-readable status is empty."""
+    raw_status = job.get("status")
+    if raw_status is not None and str(raw_status).strip():
+        return _normalize_status(raw_status)
+    if job.get("isInProgress") is True:
+        return "PROCESSING"
+    if job.get("isReady") is True:
+        return "QUEUED"
+    return "UNKNOWN"
+
+
 def poll_jobs(
     client: FossologyClient,
     upload_id: Optional[Union[int, str]] = None,
@@ -114,6 +126,7 @@ def poll_jobs(
                     for queue_item in queue_items:
                         if isinstance(queue_item, dict):
                             upload_jobs.append({
+                                **queue_item,
                                 "id": queue_item.get("jobQueueId"),
                                 "name": queue_item.get("jobQueueType"),
                                 "status": queue_item.get("status"),
@@ -175,7 +188,7 @@ def poll_jobs(
         # Check for job failures case-insensitively among the jobs selected above.
         failed_jobs = [
             j for j in active_jobs
-            if _normalize_status(j.get("status")) == "FAILED"
+            if _job_status(j) == "FAILED"
         ]
         if failed_jobs:
             failed_names = ", ".join(
@@ -200,7 +213,7 @@ def poll_jobs(
                 sleep_fn(poll_interval)
                 continue
 
-        statuses = [_normalize_status(j.get("status")) for j in active_jobs]
+        statuses = [_job_status(j) for j in active_jobs]
 
         # Check if all active jobs are completed (matches COMPLETED or CLOSED case-insensitively)
         all_completed = all(status in ("COMPLETED", "CLOSED") for status in statuses)
