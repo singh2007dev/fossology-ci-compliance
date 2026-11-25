@@ -352,7 +352,7 @@ def get_job_status(
     job_id: Optional[Union[int, str]] = None,
 ) -> Any:
     """
-    Retrieve job status for an upload via GET /repo/api/v1/jobs?upload={upload_id}
+    Retrieve upload job history via GET /repo/api/v1/jobs/history?upload={upload_id}
     or for a specific job via GET /repo/api/v1/jobs/{job_id}.
 
     Args:
@@ -373,7 +373,7 @@ def get_job_status(
     if job_id is not None:
         endpoint = build_api_url(base_url, f"jobs/{job_id}")
     else:
-        endpoint = build_api_url(base_url, f"jobs?upload={upload_id}")
+        endpoint = build_api_url(base_url, f"jobs/history?upload={upload_id}")
 
     headers = {
         "Authorization": f"Bearer {auth_token}",
@@ -487,7 +487,7 @@ class FossologyClient:
         job_id: Optional[Union[int, str]] = None,
     ) -> Any:
         """
-        Retrieve job status for an upload via GET /repo/api/v1/jobs?upload={upload_id}
+        Retrieve upload job history via GET /repo/api/v1/jobs/history?upload={upload_id}
         or for a specific job via GET /repo/api/v1/jobs/{job_id}.
         """
         return get_job_status(

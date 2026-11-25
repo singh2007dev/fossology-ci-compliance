@@ -106,6 +106,26 @@ def poll_jobs(
         else:
             jobs = []
 
+        # Upload history contains agent queue entries nested under each job.
+        # Flatten them so required-name and status checks see ununpack/adj2nest.
+        if job_id is None:
+            upload_jobs = []
+            for job in jobs:
+                if not isinstance(job, dict):
+                    continue
+                queue_items = job.get("jobQueue")
+                if isinstance(queue_items, list):
+                    for queue_item in queue_items:
+                        if isinstance(queue_item, dict):
+                            upload_jobs.append({
+                                "id": queue_item.get("jobQueueId"),
+                                "name": queue_item.get("jobQueueType"),
+                                "status": queue_item.get("status"),
+                            })
+                else:
+                    upload_jobs.append(job)
+            jobs = upload_jobs
+
         # Handle empty job lists (jobs may still be initializing in the scheduler queue)
         if not jobs:
             print(f"  No active {stage_name} jobs listed yet. Waiting for jobs to be scheduled...")

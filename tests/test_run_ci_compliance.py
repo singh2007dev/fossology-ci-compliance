@@ -893,10 +893,15 @@ class TestRunCICompliance(unittest.TestCase):
         mock_client = MagicMock()
         mock_client.get_job_status.side_effect = [
             [{"id": 4, "name": "source_archive.zip", "uploadId": "4", "status": "Completed"}],
-            [
-                {"id": 5, "name": "ununpack", "uploadId": "4", "status": "Completed"},
-                {"id": 6, "name": "adj2nest", "uploadId": "4", "status": "Completed"},
-            ],
+            [{
+                "jobId": 13,
+                "jobName": "source_archive.zip",
+                "uploadId": 4,
+                "jobQueue": [
+                    {"jobQueueId": 19, "jobQueueType": "ununpack", "status": "Completed"},
+                    {"jobQueueId": 20, "jobQueueType": "adj2nest", "status": "Completed"},
+                ],
+            }],
         ]
 
         sleep_calls = []
@@ -911,8 +916,63 @@ class TestRunCICompliance(unittest.TestCase):
         )
 
         self.assertEqual(len(jobs), 2)
+        self.assertEqual({job["name"] for job in jobs}, {"ununpack", "adj2nest"})
         self.assertEqual(mock_client.get_job_status.call_count, 2)
         self.assertEqual(sleep_calls, [2])
+
+    def test_poll_jobs_history_waits_for_pending_agents_then_completes(self):
+        mock_client = MagicMock()
+        mock_client.get_job_status.side_effect = [
+            [{"jobId": 13, "jobName": "source_archive.zip", "uploadId": 4, "jobQueue": [
+                {"jobQueueId": 19, "jobQueueType": "ununpack", "status": "Completed"},
+                {"jobQueueId": 20, "jobQueueType": "adj2nest", "status": "Queued"},
+            ]}],
+            [{"jobId": 13, "jobName": "source_archive.zip", "uploadId": 4, "jobQueue": [
+                {"jobQueueId": 19, "jobQueueType": "ununpack", "status": "Completed"},
+                {"jobQueueId": 20, "jobQueueType": "adj2nest", "status": "Running"},
+            ]}],
+            [{"jobId": 13, "jobName": "source_archive.zip", "uploadId": 4, "jobQueue": [
+                {"jobQueueId": 19, "jobQueueType": "ununpack", "status": "Completed"},
+                {"jobQueueId": 20, "jobQueueType": "adj2nest", "status": "Completed"},
+            ]}],
+        ]
+
+        sleep_calls = []
+        jobs = poll_jobs(
+            client=mock_client,
+            upload_id=4,
+            stage_name="initial upload-processing",
+            required_job_names=("ununpack", "adj2nest"),
+            poll_interval=2,
+            timeout=10,
+            sleep_fn=lambda seconds: sleep_calls.append(seconds),
+        )
+
+        self.assertEqual({job["name"] for job in jobs}, {"ununpack", "adj2nest"})
+        self.assertEqual([job["status"] for job in jobs], ["Completed", "Completed"])
+        self.assertEqual(mock_client.get_job_status.call_count, 3)
+        self.assertEqual(sleep_calls, [2, 2])
+
+    def test_poll_jobs_history_fails_when_an_agent_fails(self):
+        mock_client = MagicMock()
+        mock_client.get_job_status.return_value = [{"jobId": 13, "jobName": "source_archive.zip", "uploadId": 4,
+            "jobQueue": [
+                {"jobQueueId": 19, "jobQueueType": "ununpack", "status": "Failed"},
+                {"jobQueueId": 20, "jobQueueType": "adj2nest", "status": "Queued"},
+            ]}]
+
+        with self.assertRaises(RuntimeError) as ctx:
+            poll_jobs(
+                client=mock_client,
+                upload_id=4,
+                stage_name="initial upload-processing",
+                required_job_names=("ununpack", "adj2nest"),
+                poll_interval=2,
+                timeout=10,
+                sleep_fn=lambda seconds: None,
+            )
+
+        self.assertIn("ununpack", str(ctx.exception))
 
     def test_poll_jobs_real_fossology_scan_stage_tracks_job_id_ignoring_initial_upload(self):
         """
@@ -1007,13 +1067,19 @@ class TestRunCICompliance(unittest.TestCase):
         mock_instance.schedule_scan.return_value = 12
 
         mock_instance.get_job_status.side_effect = [
-            # Stage 1: An upload-level record alone does not prove both agents completed.
-            [{"id": 4, "name": "source_archive.zip", "uploadId": "4", "status": "Processing"}],
-            [{"id": 4, "name": "source_archive.zip", "uploadId": "4", "status": "Completed"}],
-            [
-                {"id": 5, "name": "ununpack", "uploadId": "4", "status": "Completed"},
-                {"id": 6, "name": "adj2nest", "uploadId": "4", "status": "Completed"},
-            ],
+            # Stage 1: Job history contains queue-item agent names and statuses.
+            [{"jobId": 13, "jobName": "source_archive.zip", "uploadId": 4, "jobQueue": [
+                {"jobQueueId": 19, "jobQueueType": "ununpack", "status": "Queued"},
+                {"jobQueueId": 20, "jobQueueType": "adj2nest", "status": "Queued"},
+            ]}],
+            [{"jobId": 13, "jobName": "source_archive.zip", "uploadId": 4, "jobQueue": [
+                {"jobQueueId": 19, "jobQueueType": "ununpack", "status": "Completed"},
+                {"jobQueueId": 20, "jobQueueType": "adj2nest", "status": "Running"},
+            ]}],
+            [{"jobId": 13, "jobName": "source_archive.zip", "uploadId": 4, "jobQueue": [
+                {"jobQueueId": 19, "jobQueueType": "ununpack", "status": "Completed"},
+                {"jobQueueId": 20, "jobQueueType": "adj2nest", "status": "Completed"},
+            ]}],
             # Stage 2: Scan scheduled (job 12), initial job 4 also present
             [
                 {"id": 12, "name": "source_archive.zip", "uploadId": "4", "status": "Processing"},
