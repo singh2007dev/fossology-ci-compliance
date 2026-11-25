@@ -51,6 +51,7 @@ fossology-ci-compliance/
 ├── compliance_policy.json
 ├── fossology_client.py
 ├── run_ci_compliance.py
+├── LICENSE
 └── README.md
 ```
 
@@ -172,7 +173,7 @@ The workflow is configured in:
 
 It runs unit tests, creates a source archive, and invokes the FOSSology compliance pipeline.
 
-The archive builder includes only the runtime Python modules. Test fixtures, reports, documentation, policy configuration, bytecode caches, and the archive itself are not scan inputs. The test suite still runs before archive creation. Findings retrieval requests `containers=false`; if FOSSology still returns the exact upload-root archive entry, the compliance checker excludes only that root entry. Findings for files inside the archive continue through normal policy evaluation.
+The archive builder includes the MIT `LICENSE` file and the three runtime Python modules. Test fixtures, reports, documentation, policy configuration, bytecode caches, and the archive itself are not scan inputs. The test suite still runs before archive creation. Findings retrieval requests `containers=false`; if FOSSology still returns the exact upload-root archive entry, the compliance checker excludes only that root entry. Findings for files inside the archive continue through normal policy evaluation.
 
 Configure these GitHub repository secrets:
 
@@ -212,4 +213,4 @@ The project includes mocked tests for upload, job polling, findings retrieval, c
 
 ## License
 
-This repository does not currently contain a `LICENSE` file or declare a project license. No license has been inferred for these files.
+This project is licensed under the MIT License. See [`LICENSE`](LICENSE) for the full license text. Copyright (c) 2026 Ishveer Singh.

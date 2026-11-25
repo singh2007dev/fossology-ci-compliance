@@ -10,6 +10,7 @@ SOURCE_FILES = (
     "fossology_client.py",
     "run_ci_compliance.py",
 )
+ARCHIVE_FILES = ("LICENSE", *SOURCE_FILES)
 ARCHIVE_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 
 
@@ -17,7 +18,7 @@ def create_source_archive(output_path: str, project_root: str = ".") -> Path:
     """Write only the runtime source files, replacing any prior archive."""
     root = Path(project_root)
     archive_path = Path(output_path)
-    source_paths = [(relative_path, root / relative_path) for relative_path in SOURCE_FILES]
+    source_paths = [(relative_path, root / relative_path) for relative_path in ARCHIVE_FILES]
     for _, source_path in source_paths:
         if not source_path.is_file():
             raise FileNotFoundError(f"Required source file not found: {source_path}")

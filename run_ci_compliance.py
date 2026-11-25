@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 FOSSology CI Compliance Pipeline Runner
 Connects fossology_client and compliance_checker to run automated end-to-end

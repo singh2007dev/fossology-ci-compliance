@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 FOSSology API Client
 A beginner-friendly module to interact with the hosted FOSSology REST API,

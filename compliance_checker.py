@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 FOSSology CI Compliance Checker
 A beginner-friendly tool to evaluate FOSSology license scan reports
