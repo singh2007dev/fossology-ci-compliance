@@ -410,7 +410,7 @@ def get_license_findings(
         containers: Whether to include archive/container entries (default: False).
 
     Returns:
-        Parsed JSON license findings list.
+        Parsed findings list from the JSON response.
     """
     base_url, auth_token = get_fossology_config(server_url=server_url, token=token)
     query = urlencode({"agent": agent, "containers": str(containers).lower()})
