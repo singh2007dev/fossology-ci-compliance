@@ -592,8 +592,8 @@ class TestRunCICompliance(unittest.TestCase):
             [{"name": "ununpack", "status": "Running"}, {"name": "adj2nest", "status": "Queued"}],
             [{"name": "ununpack", "status": "Completed"}, {"name": "adj2nest", "status": "Running"}],
             [{"name": "ununpack", "status": "Completed"}, {"name": "adj2nest", "status": "Completed"}],
-            [{"name": "nomos", "status": "Running"}, {"name": "monk", "status": "Queued"}],
-            [{"name": "nomos", "status": "Completed"}, {"name": "monk", "status": "Completed"}],
+            [{"name": "nomos", "status": "Running"}, {"id": 202, "name": "monk", "status": "Queued"}],
+            [{"name": "nomos", "status": "Completed"}, {"id": 202, "name": "monk", "status": "Completed"}],
         ]
 
         mock_instance.get_license_findings.return_value = [
@@ -626,7 +626,7 @@ class TestRunCICompliance(unittest.TestCase):
 
         poll_history = []
 
-        def mock_get_job_status(upload_id):
+        def mock_get_job_status(upload_id=None, job_id=None):
             call_idx = len(poll_history)
             if call_idx == 0:
                 # ununpack Running, adj2nest Queued
@@ -639,7 +639,7 @@ class TestRunCICompliance(unittest.TestCase):
                 res = [{"name": "ununpack", "status": "Completed"}, {"name": "adj2nest", "status": "Completed"}]
             else:
                 # Scan jobs completed (both nomos and monk)
-                res = [{"name": "nomos", "status": "Completed"}, {"name": "monk", "status": "Completed"}]
+                res = [{"name": "nomos", "status": "Completed"}, {"id": 202, "name": "monk", "status": "Completed"}]
 
             poll_history.append((res, mock_instance.schedule_scan.call_count))
             return res
@@ -733,7 +733,7 @@ class TestRunCICompliance(unittest.TestCase):
 
         poll_history = []
 
-        def mock_get_job_status(upload_id):
+        def mock_get_job_status(upload_id=None, job_id=None):
             call_idx = len(poll_history)
             if call_idx == 0:
                 # Poll 1: only ununpack completed
@@ -750,7 +750,7 @@ class TestRunCICompliance(unittest.TestCase):
                     {"name": "ununpack", "status": "Completed"},
                     {"name": "adj2nest", "status": "Completed"},
                     {"name": "nomos", "status": "Completed"},
-                    {"name": "monk", "status": "Completed"},
+                    {"id": 202, "name": "monk", "status": "Completed"},
                 ]
 
             poll_history.append((res, mock_instance.schedule_scan.call_count))
@@ -812,7 +812,7 @@ class TestRunCICompliance(unittest.TestCase):
             {"name": "ununpack", "status": "COMPLETED"},
             {"name": "adj2nest", "status": "COMPLETED"},
             {"name": "nomos", "status": "COMPLETED"},
-            {"name": "monk", "status": "COMPLETED"},
+            {"id": 202, "name": "monk", "status": "COMPLETED"},
         ]
         mock_instance.get_license_findings.return_value = [
             {"filePath": "src/bad.py", "findings": {"scanner": ["GPL-3.0-only"], "conclusion": None}},
@@ -880,6 +880,169 @@ class TestRunCICompliance(unittest.TestCase):
             sleep_fn=lambda s: None,
         )
         self.assertEqual(code, 2)
+
+    # -------------------------------------------------------------
+    # Real FOSSology API Structure Tests (Upload-Level & Job ID records)
+    # -------------------------------------------------------------
+
+    def test_poll_jobs_waits_for_required_agents_after_upload_level_record(self):
+        """
+        An upload-level record without agent names does not satisfy the required
+        initial processing jobs; polling continues until both agent names appear.
+        """
+        mock_client = MagicMock()
+        mock_client.get_job_status.side_effect = [
+            [{"id": 4, "name": "source_archive.zip", "uploadId": "4", "status": "Completed"}],
+            [
+                {"id": 5, "name": "ununpack", "uploadId": "4", "status": "Completed"},
+                {"id": 6, "name": "adj2nest", "uploadId": "4", "status": "Completed"},
+            ],
+        ]
+
+        sleep_calls = []
+        jobs = poll_jobs(
+            client=mock_client,
+            upload_id=4,
+            stage_name="initial upload-processing",
+            required_job_names=("ununpack", "adj2nest"),
+            poll_interval=2,
+            timeout=10,
+            sleep_fn=lambda s: sleep_calls.append(s),
+        )
+
+        self.assertEqual(len(jobs), 2)
+        self.assertEqual(mock_client.get_job_status.call_count, 2)
+        self.assertEqual(sleep_calls, [2])
+
+    def test_poll_jobs_real_fossology_scan_stage_tracks_job_id_ignoring_initial_upload(self):
+        """
+        Verify that during license scan polling on a real FOSSology server,
+        an already-completed initial upload job does NOT trigger false early completion;
+        poll_jobs tracks the scheduled job_id until it completes.
+        """
+        mock_client = MagicMock()
+        mock_client.get_job_status.side_effect = [
+            # 1st poll: scheduled scan job 12 is Processing; initial job 4 is Completed
+            [
+                {"id": 12, "name": "source_archive.zip", "uploadId": "4", "status": "Processing"},
+                {"id": 4, "name": "source_archive.zip", "uploadId": "4", "status": "Completed"},
+            ],
+            # 2nd poll: scheduled scan job 12 is Completed
+            [
+                {"id": 12, "name": "source_archive.zip", "uploadId": "4", "status": "Completed"},
+                {"id": 4, "name": "source_archive.zip", "uploadId": "4", "status": "Completed"},
+            ],
+        ]
+
+        sleep_calls = []
+        jobs = poll_jobs(
+            client=mock_client,
+            upload_id=4,
+            job_id=12,
+            stage_name="license scan",
+            required_job_names=("nomos", "monk"),
+            ignored_job_names=("ununpack", "adj2nest"),
+            poll_interval=1,
+            timeout=10,
+            sleep_fn=lambda s: sleep_calls.append(s),
+        )
+
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0]["id"], 12)
+        self.assertEqual(jobs[0]["status"], "Completed")
+        self.assertEqual(mock_client.get_job_status.call_count, 2)
+        self.assertEqual(sleep_calls, [1])
+
+    def test_poll_jobs_prefers_job_id_when_both_ids_are_provided(self):
+        mock_client = MagicMock()
+        mock_client.get_job_status.return_value = {
+            "id": 12,
+            "name": "source_archive.zip",
+            "status": "Completed",
+        }
+
+        jobs = poll_jobs(
+            client=mock_client,
+            upload_id=4,
+            job_id=12,
+            stage_name="license scan",
+            poll_interval=1,
+            timeout=10,
+            sleep_fn=lambda s: None,
+        )
+
+        self.assertEqual(jobs[0]["id"], 12)
+        mock_client.get_job_status.assert_called_once_with(job_id=12)
+        self.assertNotIn(call(upload_id=4), mock_client.get_job_status.call_args_list)
+
+    def test_poll_jobs_job_id_ignores_other_agent_jobs(self):
+        mock_client = MagicMock()
+        mock_client.get_job_status.return_value = [
+            {"id": 12, "name": "nomos", "status": "Completed"},
+            {"id": 13, "name": "monk", "status": "Failed"},
+        ]
+
+        jobs = poll_jobs(
+            client=mock_client,
+            upload_id=4,
+            job_id=12,
+            stage_name="license scan",
+            required_job_names=("nomos", "monk"),
+            ignored_job_names=("ununpack", "adj2nest"),
+            poll_interval=1,
+            timeout=10,
+            sleep_fn=lambda s: None,
+        )
+
+        self.assertEqual(jobs, [{"id": 12, "name": "nomos", "status": "Completed"}])
+        mock_client.get_job_status.assert_called_once_with(job_id=12)
+
+    @patch("run_ci_compliance.FossologyClient")
+    def test_run_pipeline_real_fossology_two_stage_execution(self, mock_client_cls):
+        """
+        Verify end-to-end pipeline execution with real FOSSology API response payloads.
+        """
+        mock_instance = mock_client_cls.return_value
+        mock_instance.upload_archive.return_value = 4
+        mock_instance.schedule_scan.return_value = 12
+
+        mock_instance.get_job_status.side_effect = [
+            # Stage 1: An upload-level record alone does not prove both agents completed.
+            [{"id": 4, "name": "source_archive.zip", "uploadId": "4", "status": "Processing"}],
+            [{"id": 4, "name": "source_archive.zip", "uploadId": "4", "status": "Completed"}],
+            [
+                {"id": 5, "name": "ununpack", "uploadId": "4", "status": "Completed"},
+                {"id": 6, "name": "adj2nest", "uploadId": "4", "status": "Completed"},
+            ],
+            # Stage 2: Scan scheduled (job 12), initial job 4 also present
+            [
+                {"id": 12, "name": "source_archive.zip", "uploadId": "4", "status": "Processing"},
+                {"id": 4, "name": "source_archive.zip", "uploadId": "4", "status": "Completed"},
+            ],
+            [
+                {"id": 12, "name": "source_archive.zip", "uploadId": "4", "status": "Completed"},
+                {"id": 4, "name": "source_archive.zip", "uploadId": "4", "status": "Completed"},
+            ],
+        ]
+
+        mock_instance.get_license_findings.return_value = [
+            {"filePath": "src/main.py", "findings": {"scanner": ["MIT"], "conclusion": ["MIT"]}},
+        ]
+
+        code = run_pipeline(
+            archive_path=self.archive_path,
+            server_url=self.server_url,
+            token=self.token,
+            poll_interval=1,
+            timeout=10,
+            sleep_fn=lambda s: None,
+        )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(mock_instance.get_job_status.call_count, 5)
+        mock_instance.upload_archive.assert_called_once()
+        mock_instance.schedule_scan.assert_called_once_with(upload_id=4, folder_id=1)
+        mock_instance.get_license_findings.assert_called_once_with(upload_id=4)
 
     # -------------------------------------------------------------
     # CLI Tests

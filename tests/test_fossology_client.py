@@ -404,6 +404,47 @@ class TestFossologyClient(unittest.TestCase):
         self.assertEqual(req.headers["Accept"], "application/json")
 
     @patch("urllib.request.urlopen")
+    def test_get_job_status_positional_arguments_remain_compatible(self, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'[]'
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        get_job_status(42, self.test_url, self.test_token, 17)
+
+        req = mock_urlopen.call_args.args[0]
+        self.assertEqual(req.get_full_url(), "http://fossology.example.com/repo/api/v1/jobs?upload=42")
+        self.assertEqual(mock_urlopen.call_args.kwargs["timeout"], 17)
+
+    @patch("urllib.request.urlopen")
+    def test_get_job_status_by_job_id(self, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.read.return_value = (
+            b'{"id": 88, "name": "source_archive.zip", "status": "COMPLETED", "uploadId": "42"}'
+        )
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        status_info = get_job_status(
+            job_id=88,
+            server_url=self.test_url,
+            token=self.test_token,
+        )
+
+        self.assertIsInstance(status_info, dict)
+        self.assertEqual(status_info["id"], 88)
+        self.assertEqual(status_info["status"], "COMPLETED")
+
+        call_args = mock_urlopen.call_args
+        req = call_args[0][0]
+        self.assertEqual(req.get_full_url(), "http://fossology.example.com/repo/api/v1/jobs/88")
+        self.assertEqual(req.get_method(), "GET")
+
+    def test_get_job_status_missing_params_raises(self):
+        with self.assertRaises(ValueError):
+            get_job_status(server_url=self.test_url, token=self.test_token)
+
+    @patch("urllib.request.urlopen")
     def test_get_job_status_client_method(self, mock_urlopen):
         mock_response = MagicMock()
         mock_response.read.return_value = (
@@ -416,6 +457,20 @@ class TestFossologyClient(unittest.TestCase):
         jobs = client.get_job_status(upload_id=42)
 
         self.assertEqual(jobs[0]["status"], "PROCESSING")
+
+    @patch("urllib.request.urlopen")
+    def test_get_job_status_client_positional_timeout_remains_compatible(self, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'[]'
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        client = FossologyClient(server_url=self.test_url, token=self.test_token)
+        client.get_job_status(42, 17)
+
+        req = mock_urlopen.call_args.args[0]
+        self.assertEqual(req.get_full_url(), "http://fossology.example.com/repo/api/v1/jobs?upload=42")
+        self.assertEqual(mock_urlopen.call_args.kwargs["timeout"], 17)
 
     @patch("urllib.request.urlopen")
     def test_get_job_status_timeout(self, mock_urlopen):

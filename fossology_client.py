@@ -345,16 +345,19 @@ def schedule_scan(
 
 
 def get_job_status(
-    upload_id: Union[int, str],
+    upload_id: Optional[Union[int, str]] = None,
     server_url: Optional[str] = None,
     token: Optional[str] = None,
     timeout: int = 60,
+    job_id: Optional[Union[int, str]] = None,
 ) -> Any:
     """
-    Retrieve job status for an upload via GET /repo/api/v1/jobs?upload={upload_id}.
+    Retrieve job status for an upload via GET /repo/api/v1/jobs?upload={upload_id}
+    or for a specific job via GET /repo/api/v1/jobs/{job_id}.
 
     Args:
-        upload_id: Target upload ID.
+        upload_id: Target upload ID (optional if job_id is provided).
+        job_id: Target job ID (optional if upload_id is provided).
         server_url: Optional server URL (defaults to FOSSOLOGY_URL env var).
         token: Optional Bearer token (defaults to FOSSOLOGY_TOKEN env var).
         timeout: Request timeout in seconds (default: 60).
@@ -362,8 +365,15 @@ def get_job_status(
     Returns:
         Parsed JSON job status information (list or dict).
     """
+    if upload_id is None and job_id is None:
+        raise ValueError("Either upload_id or job_id must be provided to get_job_status")
+
     base_url, auth_token = get_fossology_config(server_url=server_url, token=token)
-    endpoint = build_api_url(base_url, f"jobs?upload={upload_id}")
+
+    if job_id is not None:
+        endpoint = build_api_url(base_url, f"jobs/{job_id}")
+    else:
+        endpoint = build_api_url(base_url, f"jobs?upload={upload_id}")
 
     headers = {
         "Authorization": f"Bearer {auth_token}",
@@ -472,14 +482,17 @@ class FossologyClient:
 
     def get_job_status(
         self,
-        upload_id: Union[int, str],
+        upload_id: Optional[Union[int, str]] = None,
         timeout: Optional[int] = None,
+        job_id: Optional[Union[int, str]] = None,
     ) -> Any:
         """
-        Retrieve job status for an upload via GET /repo/api/v1/jobs?upload={upload_id}.
+        Retrieve job status for an upload via GET /repo/api/v1/jobs?upload={upload_id}
+        or for a specific job via GET /repo/api/v1/jobs/{job_id}.
         """
         return get_job_status(
             upload_id=upload_id,
+            job_id=job_id,
             server_url=self.server_url,
             token=self.token,
             timeout=timeout or self.timeout,

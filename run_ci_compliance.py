@@ -38,13 +38,14 @@ def _normalize_status(raw_status: Any) -> str:
 
 def poll_jobs(
     client: FossologyClient,
-    upload_id: Union[int, str],
+    upload_id: Optional[Union[int, str]] = None,
     stage_name: str = "scan",
     poll_interval: int = 10,
     timeout: int = 900,
     sleep_fn=time.sleep,
     required_job_names: Optional[Sequence[str]] = None,
     ignored_job_names: Optional[Sequence[str]] = None,
+    job_id: Optional[Union[int, str]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Poll FOSSology job status every poll_interval seconds until all jobs complete,
@@ -55,7 +56,7 @@ def poll_jobs(
 
     Args:
         client: Configured FossologyClient instance.
-        upload_id: Target upload ID.
+        upload_id: Target upload ID (optional if job_id provided).
         stage_name: Descriptive name of the stage being polled.
         poll_interval: Seconds between polls (default: 10).
         timeout: Maximum seconds to wait before timing out (default: 900 / 15 minutes).
@@ -64,6 +65,7 @@ def poll_jobs(
             that must all appear in the job queue before completing.
         ignored_job_names: Optional sequence of job names (e.g. ('ununpack', 'adj2nest'))
             to ignore when evaluating job completion.
+        job_id: Optional specific job ID to track (e.g. from schedule_scan).
 
     Returns:
         List of completed job objects.
@@ -78,12 +80,20 @@ def poll_jobs(
     while True:
         elapsed = time.time() - start_time
         if elapsed >= timeout:
+            target_str = f"job_id={job_id}" if job_id is not None else f"upload_id={upload_id}"
             raise FossologyTimeoutError(
                 f"Timeout after {int(elapsed)}s waiting for {stage_name} jobs to complete on FOSSology server "
-                f"(upload_id={upload_id})."
+                f"({target_str})."
             )
 
-        job_info = client.get_job_status(upload_id=upload_id)
+        check_required_job_names = job_id is None and required_job_names is not None
+        if job_id is not None:
+            job_info = client.get_job_status(job_id=job_id)
+        elif upload_id is not None:
+            job_info = client.get_job_status(upload_id=upload_id)
+        else:
+            raise ValueError("Either upload_id or job_id must be provided to poll_jobs.")
+
         print("DEBUG job_info type:", type(job_info).__name__)
         print("DEBUG job_info:", json.dumps(job_info, indent=2)[:3000])
 
@@ -102,17 +112,51 @@ def poll_jobs(
             sleep_fn(poll_interval)
             continue
 
-        # Filter out ignored jobs if specified (e.g. ununpack and adj2nest during license scan)
-        if ignored_job_names:
-            ignored_set = {str(n).strip().lower() for n in ignored_job_names}
+        if job_id is not None:
+            # A scheduled job ID takes precedence over any other records in the response.
             active_jobs = [
                 j for j in jobs
-                if isinstance(j, dict) and str(j.get("name", "")).strip().lower() not in ignored_set
+                if isinstance(j, dict) and str(j.get("id")) == str(job_id)
             ]
+            if not active_jobs:
+                print(f"  Waiting for scheduled job {job_id} to appear in job queue...")
+                sleep_fn(poll_interval)
+                continue
         else:
-            active_jobs = [j for j in jobs if isinstance(j, dict)]
+            # Upload-level polling can return agent names or upload-level records.
+            known_agent_names = {str(n).strip().lower() for n in (required_job_names or ())} | {
+                str(n).strip().lower() for n in (ignored_job_names or ())
+            }
+            has_agent_names = any(
+                str(j.get("name", "")).strip().lower() in known_agent_names
+                for j in jobs if isinstance(j, dict)
+            )
 
-        # Check for job failures case-insensitively across active jobs
+            if has_agent_names:
+                # Filter out ignored jobs if specified (e.g. ununpack and adj2nest during license scan)
+                if ignored_job_names:
+                    ignored_set = {str(n).strip().lower() for n in ignored_job_names}
+                    active_jobs = [
+                        j for j in jobs
+                        if isinstance(j, dict) and str(j.get("name", "")).strip().lower() not in ignored_set
+                    ]
+                else:
+                    active_jobs = [j for j in jobs if isinstance(j, dict)]
+
+                if not active_jobs:
+                    print(f"  No active {stage_name} jobs listed yet. Waiting for jobs to be scheduled...")
+                    sleep_fn(poll_interval)
+                    continue
+
+            else:
+                active_jobs = [j for j in jobs if isinstance(j, dict)]
+
+            if not active_jobs:
+                print(f"  No active {stage_name} jobs listed yet. Waiting for jobs to be scheduled...")
+                sleep_fn(poll_interval)
+                continue
+
+        # Check for job failures case-insensitively among the jobs selected above.
         failed_jobs = [
             j for j in active_jobs
             if _normalize_status(j.get("status")) == "FAILED"
@@ -123,9 +167,7 @@ def poll_jobs(
             )
             raise RuntimeError(f"FOSSology {stage_name} job(s) failed: {failed_names}")
 
-        # If specific jobs are required (e.g. nomos and monk during license scan),
-        # verify that ALL required jobs have appeared
-        if required_job_names:
+        if check_required_job_names and required_job_names:
             req_set = {str(n).strip().lower() for n in required_job_names}
             found_names = {
                 str(j.get("name", "")).strip().lower()
@@ -211,7 +253,7 @@ def run_pipeline(
             client=client,
             upload_id=upload_id,
             stage_name="initial upload-processing",
-            # required_job_names=("ununpack", "adj2nest"),
+            required_job_names=("ununpack", "adj2nest"),
             poll_interval=poll_interval,
             timeout=timeout,
             sleep_fn=sleep_fn,
@@ -228,6 +270,7 @@ def run_pipeline(
         poll_jobs(
             client=client,
             upload_id=upload_id,
+            job_id=job_id,
             stage_name="license scan",
             required_job_names=("nomos", "monk"),
             ignored_job_names=("ununpack", "adj2nest"),
