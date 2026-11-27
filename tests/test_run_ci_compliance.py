@@ -3,7 +3,9 @@ Unit tests for run_ci_compliance.py.
 Using Python's built-in unittest framework and mock objects.
 """
 
+import csv
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -21,12 +23,17 @@ from run_ci_compliance import (
     main,
     poll_jobs,
     run_pipeline,
+    export_findings,
 )
 
 
 class TestRunCICompliance(unittest.TestCase):
 
     def setUp(self):
+        self.original_cwd = os.getcwd()
+        self.report_directory = tempfile.TemporaryDirectory()
+        os.chdir(self.report_directory.name)
+
         # Create a dummy archive file for testing
         self.temp_file = tempfile.NamedTemporaryFile("wb", delete=False, suffix=".zip")
         self.temp_file.write(b"PK\x03\x04dummy_zip_content")
@@ -39,6 +46,8 @@ class TestRunCICompliance(unittest.TestCase):
     def tearDown(self):
         if os.path.exists(self.archive_path):
             os.remove(self.archive_path)
+        os.chdir(self.original_cwd)
+        self.report_directory.cleanup()
 
     # -------------------------------------------------------------
     # Status Normalization & Polling Logic Tests
@@ -566,6 +575,22 @@ class TestRunCICompliance(unittest.TestCase):
         )
 
         self.assertEqual(code, 0)
+        json_path = os.path.join(os.getcwd(), "fossology_upload_101_findings.json")
+        csv_path = os.path.join(os.getcwd(), "fossology_upload_101_findings.csv")
+        with open(json_path, "r", encoding="utf-8") as report_file:
+            self.assertEqual(json.load(report_file), mock_instance.get_license_findings.return_value)
+        with open(csv_path, "r", encoding="utf-8", newline="") as report_file:
+            rows = list(csv.DictReader(report_file))
+        self.assertEqual(rows[0], {
+            "filePath": "src/main.py",
+            "scanner": "MIT",
+            "conclusion": "MIT",
+        })
+        self.assertEqual(rows[1], {
+            "filePath": "src/utils.py",
+            "scanner": "Apache-2.0",
+            "conclusion": "",
+        })
         mock_instance.upload_archive.assert_called_once()
         mock_instance.schedule_scan.assert_called_once_with(upload_id=101, folder_id=1)
         mock_instance.get_license_findings.assert_called_once_with(upload_id=101)
@@ -834,6 +859,73 @@ class TestRunCICompliance(unittest.TestCase):
 
         # Prohibited license must exit with code 1
         self.assertEqual(code, 1)
+        self.assertTrue(os.path.exists("fossology_upload_101_findings.json"))
+        self.assertTrue(os.path.exists("fossology_upload_101_findings.csv"))
+
+    def test_export_findings_preserves_actual_findings_and_frontend_csv_shape(self):
+        findings = [
+            {
+                "filePath": "src/actual_component.py",
+                "findings": {
+                    "scanner": ["MIT", "Apache-2.0"],
+                    "conclusion": None,
+                },
+            },
+        ]
+
+        json_path, csv_path = export_findings(findings, 42)
+
+        self.assertEqual(json_path, "fossology_upload_42_findings.json")
+        self.assertEqual(csv_path, "fossology_upload_42_findings.csv")
+        with open(json_path, "r", encoding="utf-8") as report_file:
+            self.assertEqual(json.load(report_file), findings)
+        with open(csv_path, "r", encoding="utf-8", newline="") as report_file:
+            reader = csv.DictReader(report_file)
+            self.assertEqual(reader.fieldnames, ["filePath", "scanner", "conclusion"])
+            self.assertEqual(list(reader), [{
+                "filePath": "src/actual_component.py",
+                "scanner": "MIT; Apache-2.0",
+                "conclusion": "",
+            }])
+
+    @patch("run_ci_compliance.FossologyClient")
+    def test_report_export_failure_does_not_change_compliance_exit_code(self, mock_client_cls):
+        mock_instance = mock_client_cls.return_value
+        mock_instance.upload_archive.return_value = 101
+        mock_instance.schedule_scan.return_value = 202
+        mock_instance.get_job_status.return_value = [
+            {"id": 1, "name": "ununpack", "status": "COMPLETED"},
+            {"id": 2, "name": "adj2nest", "status": "COMPLETED"},
+            {"id": 201, "name": "nomos", "status": "COMPLETED"},
+            {"id": 202, "name": "monk", "status": "COMPLETED"},
+        ]
+        mock_instance.get_license_findings.return_value = [
+            {"filePath": "src/allowed.py", "findings": {"scanner": ["MIT"], "conclusion": None}},
+        ]
+
+        with patch("run_ci_compliance.export_findings", side_effect=OSError("read-only output")):
+            code = run_pipeline(
+                archive_path=self.archive_path,
+                server_url=self.server_url,
+                token=self.token,
+                poll_interval=1,
+                timeout=10,
+                sleep_fn=lambda s: None,
+            )
+            self.assertEqual(code, 0)
+
+            mock_instance.get_license_findings.return_value = [
+                {"filePath": "src/prohibited.py", "findings": {"scanner": ["GPL-3.0-only"], "conclusion": None}},
+            ]
+            fail_code = run_pipeline(
+                archive_path=self.archive_path,
+                server_url=self.server_url,
+                token=self.token,
+                poll_interval=1,
+                timeout=10,
+                sleep_fn=lambda s: None,
+            )
+            self.assertEqual(fail_code, 1)
 
     @patch("run_ci_compliance.FossologyClient")
     def test_run_pipeline_empty_findings_fails_compliance(self, mock_client_cls):

@@ -6,6 +6,8 @@ compliance verification in CI workflows.
 """
 
 import argparse
+import csv
+import json
 import os
 import sys
 import time
@@ -13,6 +15,7 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 from compliance_checker import (
     load_policy,
+    parse_fossology_report,
     print_summary,
     process_report,
 )
@@ -229,6 +232,41 @@ def poll_jobs(
         sleep_fn(poll_interval)
 
 
+def export_findings(findings: Any, upload_id: Union[int, str]) -> List[str]:
+    """Write retrieved FOSSology findings as frontend-compatible JSON and CSV."""
+    items = parse_fossology_report(findings)
+    stem = f"fossology_upload_{upload_id}_findings"
+    json_path = f"{stem}.json"
+    csv_path = f"{stem}.csv"
+
+    def csv_licenses(value: Any) -> str:
+        if not isinstance(value, list):
+            return ""
+        return "; ".join(str(license_id) for license_id in value if license_id is not None)
+
+    with open(json_path, "w", encoding="utf-8") as report_file:
+        json.dump(findings, report_file, indent=2, ensure_ascii=False)
+        report_file.write("\n")
+
+    with open(csv_path, "w", encoding="utf-8", newline="") as report_file:
+        writer = csv.writer(report_file)
+        writer.writerow(("filePath", "scanner", "conclusion"))
+        for item in items:
+            if not isinstance(item, dict):
+                raise ValueError("Invalid report format: each finding must be a JSON object.")
+            report_findings = item.get("findings", {})
+            if not isinstance(report_findings, dict):
+                report_findings = {}
+
+            writer.writerow((
+                item.get("filePath", "Unknown File"),
+                csv_licenses(report_findings.get("scanner")),
+                csv_licenses(report_findings.get("conclusion")),
+            ))
+
+    return [json_path, csv_path]
+
+
 def run_pipeline(
     archive_path: str,
     policy_path: Optional[str] = None,
@@ -312,6 +350,13 @@ def run_pipeline(
         # Step 5: Retrieve findings and evaluate compliance
         print(f"[5/5] Retrieving license findings and evaluating compliance...")
         findings = client.get_license_findings(upload_id=upload_id)
+
+        try:
+            report_paths = export_findings(findings, upload_id)
+            print(f"      Saved findings reports: {', '.join(report_paths)}")
+        except (OSError, TypeError, ValueError) as err:
+            # Report export must not change the compliance result or exit code.
+            print(f"WARNING: Failed to export findings reports: {err}", file=sys.stderr)
 
         summary = process_report(
             findings,

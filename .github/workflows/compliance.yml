@@ -34,3 +34,14 @@ jobs:
           FOSSOLOGY_TOKEN: ${{ secrets.FOSSOLOGY_TOKEN }}
         run: |
           python3 -u run_ci_compliance.py --archive source_archive.zip --policy compliance_policy.json
+
+      - name: Upload FOSSology findings reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: fossology-findings-${{ github.run_number }}
+          path: |
+            fossology_upload_*_findings.json
+            fossology_upload_*_findings.csv
+          if-no-files-found: ignore
