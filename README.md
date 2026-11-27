@@ -206,6 +206,28 @@ API-related tests use mocks and do not upload archives or start scans.
 
 The project includes mocked tests for upload, job polling, findings retrieval, compliance evaluation, and failure handling. These tests verify the request format, including the required findings `agent` parameter. They do not verify connectivity, permissions, or scan execution on a live FOSSology server. A live GitHub Actions run is required to verify those server-specific settings.
 
+## Frontend Dashboard
+
+The dependency-free static dashboard lives in `frontend/`. It shows the project overview and policy, and can locally evaluate a FOSSology JSON or CSV report selected by the user. The selected report stays in the browser session; it is not uploaded or saved.
+
+The dashboard does not connect to FOSSology or GitHub Actions. Live validation status, CI history, and server-side errors are not available because this project has no frontend API or persisted result feed. GitHub Actions results remain available in the workflow run logs. The reports in `samples/` are fixtures for development and testing; they are examples, not current compliance results.
+
+### Run locally
+
+Serve the frontend directory over HTTP (the browser fetches its policy file):
+
+```bash
+python3 -m http.server 8000 --directory frontend
+```
+
+Then open <http://localhost:8000>. Import a JSON or CSV report from the dashboard to evaluate it against `frontend/policy.json`. This policy file mirrors the repository's `compliance_policy.json`; keep them synchronized when policy rules change.
+
+### Deploy independently
+
+Publish the contents of `frontend/` to any static hosting provider, such as GitHub Pages, Netlify, or Cloudflare Pages. No build command, package manager, or backend service is required. Ensure `index.html`, `styles.css`, `app.js`, and `policy.json` are published together at the same path. Update `frontend/policy.json` to match `compliance_policy.json` before deploying policy changes.
+
+The frontend uses no API credentials and makes no requests to FOSSology. Imported reports are evaluated locally in the browser and are cleared when the page is closed or refreshed. To show actual CI run history or live results, the project would need a result feed/API, which is outside this frontend-only change.
+
 ## Future Improvements
 
 - Improve compliance reporting and error diagnostics.
